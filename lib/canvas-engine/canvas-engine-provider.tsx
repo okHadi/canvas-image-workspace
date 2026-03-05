@@ -12,8 +12,13 @@ function generateId(): string {
 export function CanvasEngineProvider({ children }: { children: React.ReactNode }) {
   const listenersRef = useRef<Set<() => void>>(new Set())
   const stageContainerRef = useRef<HTMLDivElement | null>(null)
+  const versionRef = useRef(0)
+  const shapesCacheRef = useRef<{ version: number; value: CanvasShape[] }>({ version: -1, value: [] })
+  const selectedIdsCacheRef = useRef<{ version: number; value: string[] }>({ version: -1, value: [] })
+  const cameraCacheRef = useRef<{ version: number; value: CameraState }>({ version: -1, value: { x: 0, y: 0, z: 1 } })
 
   const notify = useCallback(() => {
+    versionRef.current++
     listenersRef.current.forEach((cb) => cb())
   }, [])
 
@@ -86,11 +91,19 @@ export function CanvasEngineProvider({ children }: { children: React.ReactNode }
       },
 
       getAllShapes() {
-        return Array.from(store.getState().shapes.values())
+        const v = versionRef.current
+        if (shapesCacheRef.current.version !== v) {
+          shapesCacheRef.current = { version: v, value: Array.from(store.getState().shapes.values()) }
+        }
+        return shapesCacheRef.current.value
       },
 
       getSelectedShapeIds() {
-        return Array.from(store.getState().selectedShapeIds)
+        const v = versionRef.current
+        if (selectedIdsCacheRef.current.version !== v) {
+          selectedIdsCacheRef.current = { version: v, value: Array.from(store.getState().selectedShapeIds) }
+        }
+        return selectedIdsCacheRef.current.value
       },
 
       selectShape(id) {
@@ -113,7 +126,11 @@ export function CanvasEngineProvider({ children }: { children: React.ReactNode }
       },
 
       getCamera() {
-        return store.getState().camera
+        const v = versionRef.current
+        if (cameraCacheRef.current.version !== v) {
+          cameraCacheRef.current = { version: v, value: store.getState().camera }
+        }
+        return cameraCacheRef.current.value
       },
 
       setCamera(camera) {
