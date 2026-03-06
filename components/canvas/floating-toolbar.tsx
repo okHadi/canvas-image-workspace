@@ -27,8 +27,11 @@ import {
   Blend,
   X,
   Box,
+  Spline,
+  Grid2X2,
 } from "lucide-react"
 import { useState, useCallback, useEffect, useRef } from "react"
+import { vectorizeImage, rasterizeImage } from "@/lib/image-conversion"
 
 export function FloatingToolbar() {
   const engine = useCanvasEngine()
@@ -84,7 +87,7 @@ function GeneratedImageToolbar({
   shape: any
 }) {
   const engine = useCanvasEngine()
-  const { processingShapes, addProcessingShape, removeProcessingShape, setMockupDepth } = useAppStore()
+  const { processingShapes, addProcessingShape, removeProcessingShape, setMockupDepth, addGeneratedImage } = useAppStore()
   const [showPromptInput, setShowPromptInput] = useState(false)
   const [editPrompt, setEditPrompt] = useState("")
   const [activeSubMenu, setActiveSubMenu] = useState<string | null>(null)
@@ -198,11 +201,101 @@ function GeneratedImageToolbar({
     setEditPrompt("")
   }, [editPrompt, shapeId, shape, engine, addProcessingShape, removeProcessingShape])
 
+  const handleVectorize = useCallback(async () => {
+    addProcessingShape(shapeId)
+    try {
+      const svgDataUrl = await vectorizeImage(shape.props.imageUrl)
+      const bounds = engine.getShapePageBounds(shapeId)
+      if (!bounds) return
+      const newShape = engine.createShape({
+        type: GENERATED_IMAGE_TYPE,
+        x: bounds.x + bounds.w + 30,
+        y: bounds.y,
+        props: {
+          w: shape.props.w,
+          h: shape.props.h,
+          imageUrl: svgDataUrl,
+          prompt: shape.props.prompt || "Vectorized",
+          style: shape.props.style,
+          model: shape.props.model,
+          aspectRatio: shape.props.aspectRatio,
+          seed: shape.props.seed,
+          isLoading: false,
+          sourceFormat: "svg" as const,
+        },
+      })
+      addGeneratedImage({
+        id: newShape.id,
+        prompt: shape.props.prompt || "Vectorized",
+        model: shape.props.model,
+        style: shape.props.style,
+        aspectRatio: shape.props.aspectRatio,
+        imageUrl: svgDataUrl,
+        seed: shape.props.seed,
+      })
+    } catch (e) {
+      alert("Vectorization failed: " + (e as Error).message)
+    }
+    removeProcessingShape(shapeId)
+  }, [shapeId, shape, engine, addProcessingShape, removeProcessingShape, addGeneratedImage])
+
+  const handleRasterize = useCallback(async () => {
+    addProcessingShape(shapeId)
+    try {
+      const pngDataUrl = await rasterizeImage(shape.props.imageUrl, Math.round(shape.props.w), Math.round(shape.props.h))
+      const bounds = engine.getShapePageBounds(shapeId)
+      if (!bounds) return
+      const newShape = engine.createShape({
+        type: GENERATED_IMAGE_TYPE,
+        x: bounds.x + bounds.w + 30,
+        y: bounds.y,
+        props: {
+          w: shape.props.w,
+          h: shape.props.h,
+          imageUrl: pngDataUrl,
+          prompt: shape.props.prompt || "Rasterized",
+          style: shape.props.style,
+          model: shape.props.model,
+          aspectRatio: shape.props.aspectRatio,
+          seed: shape.props.seed,
+          isLoading: false,
+          sourceFormat: "raster" as const,
+        },
+      })
+      addGeneratedImage({
+        id: newShape.id,
+        prompt: shape.props.prompt || "Rasterized",
+        model: shape.props.model,
+        style: shape.props.style,
+        aspectRatio: shape.props.aspectRatio,
+        imageUrl: pngDataUrl,
+        seed: shape.props.seed,
+      })
+    } catch (e) {
+      alert("Rasterization failed: " + (e as Error).message)
+    }
+    removeProcessingShape(shapeId)
+  }, [shapeId, shape, engine, addProcessingShape, removeProcessingShape, addGeneratedImage])
+
   const handleExport = useCallback(() => {
-    const link = document.createElement("a")
-    link.href = shape.props.imageUrl
-    link.download = `generated-${shapeId}.jpg`
-    link.click()
+    if (shape.props.sourceFormat === "svg") {
+      // Decode base64 SVG and export as .svg file
+      const dataUrl = shape.props.imageUrl as string
+      const base64 = dataUrl.split(",")[1]
+      const svgString = decodeURIComponent(escape(atob(base64)))
+      const blob = new Blob([svgString], { type: "image/svg+xml" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `generated-${shapeId}.svg`
+      link.click()
+      URL.revokeObjectURL(url)
+    } else {
+      const link = document.createElement("a")
+      link.href = shape.props.imageUrl
+      link.download = `generated-${shapeId}.jpg`
+      link.click()
+    }
   }, [shape, shapeId])
 
   const handleCopyPrompt = useCallback(() => {
@@ -383,6 +476,12 @@ function GeneratedImageToolbar({
             { icon: <Expand size={14} />, label: "Image Expand", onClick: () => { handleAiTool("expand"); setActiveSubMenu(null) } },
             { icon: <ArrowUpFromLine size={14} />, label: "Upscale", onClick: () => { handleAiTool("upscale"); setActiveSubMenu(null) } },
             { icon: <Box size={14} />, label: "Product Mockup", onClick: () => { handleProductMockup(); setActiveSubMenu(null) } },
+            ...(shape.props.sourceFormat !== "svg" && shape.props.imageUrl
+              ? [{ icon: <Spline size={14} />, label: "Vectorize (SVG)", onClick: () => { handleVectorize(); setActiveSubMenu(null) } }]
+              : []),
+            ...(shape.props.sourceFormat === "svg"
+              ? [{ icon: <Grid2X2 size={14} />, label: "Rasterize (PNG)", onClick: () => { handleRasterize(); setActiveSubMenu(null) } }]
+              : []),
           ]}
         />
       )}

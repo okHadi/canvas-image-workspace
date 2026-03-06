@@ -65,6 +65,7 @@ export function CustomToolbar() {
             aspectRatio: w === h ? "1:1" : w > h ? "16:9" : "9:16",
             seed: 0,
             isLoading: false,
+            sourceFormat: file.type === "image/svg+xml" ? "svg" : "raster",
           },
         })
 

@@ -40,6 +40,7 @@ export interface GeneratedImageProps {
   aspectRatio: string
   seed: number
   isLoading: boolean
+  sourceFormat?: "raster" | "svg"
 }
 
 export interface CanvasFrameProps {

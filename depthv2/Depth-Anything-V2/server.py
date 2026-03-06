@@ -158,3 +158,38 @@ def predict_depth(req: DepthRequest):
             # Omit mask fields — client falls back to unmasked behavior
 
     return result
+
+
+# --- Vectorization endpoint (vtracer) ---
+try:
+    import vtracer
+    print("vtracer loaded successfully")
+except ImportError:
+    vtracer = None
+    print("Warning: vtracer not installed. /vectorize endpoint will be unavailable.")
+
+
+class VectorizeRequest(BaseModel):
+    image: str  # base64 encoded image
+
+
+@app.post("/vectorize")
+def vectorize(req: VectorizeRequest):
+    if vtracer is None:
+        return {"error": "vtracer not installed. Run: pip install vtracer"}
+
+    img_bytes = base64.b64decode(req.image)
+    svg_str = vtracer.convert_raw_image_to_svg(
+        img_bytes,
+        colormode="color",
+        hierarchical="stacked",
+        filter_speckle=4,
+        color_precision=8,
+        layer_difference=16,
+        corner_threshold=60,
+        length_threshold=4.0,
+        max_iterations=10,
+        splice_threshold=45,
+        path_precision=3,
+    )
+    return {"svg": svg_str}
