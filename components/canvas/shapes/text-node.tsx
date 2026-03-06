@@ -8,7 +8,7 @@ import type { CanvasShape, TextProps } from "@/lib/canvas-engine/types"
 interface Props {
   shape: CanvasShape
   isSelected: boolean
-  onSelect: (id: string) => void
+  onSelect: (id: string, e?: MouseEvent) => void
   onDragEnd: (id: string, x: number, y: number) => void
   onTextChange: (id: string, text: string) => void
   isDraggable: boolean
@@ -83,8 +83,8 @@ export function TextNode({ shape, isSelected, onSelect, onDragEnd, onTextChange,
       x={shape.x}
       y={shape.y}
       draggable={isDraggable}
-      onClick={() => onSelect(shape.id)}
-      onTap={() => onSelect(shape.id)}
+      onClick={(e) => { e.cancelBubble = true; onSelect(shape.id, e.evt) }}
+      onTap={(e) => { e.cancelBubble = true; onSelect(shape.id, e.evt as unknown as MouseEvent) }}
       onDblClick={handleDblClick}
       onDblTap={handleDblClick}
       onDragEnd={(e) => onDragEnd(shape.id, e.target.x(), e.target.y())}

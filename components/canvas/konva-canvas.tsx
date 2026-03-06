@@ -1,10 +1,11 @@
 "use client"
 
 import React, { useRef, useEffect, useState, useCallback } from "react"
-import { Stage, Layer, Circle, Transformer, Rect } from "react-konva"
+import { Stage, Layer, Circle, Transformer, Rect, Line } from "react-konva"
 import { useCanvasEngine, useCanvasValue } from "@/lib/canvas-engine"
 import { ShapeRenderer } from "./shapes/shape-renderer"
-import type { CanvasShape, DrawProps } from "@/lib/canvas-engine/types"
+import type { CanvasShape, DrawProps, GeneratedImageProps } from "@/lib/canvas-engine/types"
+import { useAppStore } from "@/lib/store"
 import type Konva from "konva"
 
 const GRID_SPACING = 40
@@ -22,6 +23,8 @@ export function KonvaCanvas() {
   const selectedIds = useCanvasValue("selected", (e) => e.getSelectedShapeIds(), [])
   const currentTool = useCanvasValue("tool", (e) => e.getCurrentToolId(), [])
   const camera = useCanvasValue("camera", (e) => e.getCamera(), [])
+
+  const showProvenanceLines = useAppStore((s) => s.showProvenanceLines)
 
   // Window resize
   useEffect(() => {
@@ -60,32 +63,42 @@ export function KonvaCanvas() {
       const stage = stageRef.current
       if (!stage) return
 
-      const pointer = stage.getPointerPosition()
-      if (!pointer) return
+      if (e.evt.ctrlKey || e.evt.metaKey) {
+        // Pinch-to-zoom (or Ctrl+scroll)
+        const pointer = stage.getPointerPosition()
+        if (!pointer) return
 
-      const oldScale = camera.z
-      const scaleBy = 1.08
-      const direction = e.evt.deltaY > 0 ? -1 : 1
-      const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy
-      const clampedScale = Math.max(0.1, Math.min(8, newScale))
+        const oldScale = camera.z
+        const scaleBy = 1.08
+        const direction = e.evt.deltaY > 0 ? -1 : 1
+        const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy
+        const clampedScale = Math.max(0.1, Math.min(8, newScale))
 
-      const mousePointTo = {
-        x: (pointer.x - camera.x) / oldScale,
-        y: (pointer.y - camera.y) / oldScale,
+        const mousePointTo = {
+          x: (pointer.x - camera.x) / oldScale,
+          y: (pointer.y - camera.y) / oldScale,
+        }
+
+        engine.setCamera({
+          x: pointer.x - mousePointTo.x * clampedScale,
+          y: pointer.y - mousePointTo.y * clampedScale,
+          z: clampedScale,
+        })
+      } else {
+        // Two-finger swipe / mouse scroll → pan the canvas
+        engine.setCamera({
+          x: camera.x - e.evt.deltaX,
+          y: camera.y - e.evt.deltaY,
+          z: camera.z,
+        })
       }
-
-      engine.setCamera({
-        x: pointer.x - mousePointTo.x * clampedScale,
-        y: pointer.y - mousePointTo.y * clampedScale,
-        z: clampedScale,
-      })
     },
     [engine, camera]
   )
 
   // Click on empty area to deselect
   const handleStageClick = useCallback(
-    (e: Konva.KonvaEventObject<MouseEvent>) => {
+    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
       if (e.target === stageRef.current || e.target.getClassName() === "Rect" && e.target.id() === "background") {
         engine.deselectAll()
       }
@@ -93,11 +106,20 @@ export function KonvaCanvas() {
     [engine]
   )
 
-  // Shape selection
+  // Shape selection (debounced to prevent onClick + onTap double-fire)
+  const lastSelectRef = useRef<{ id: string; time: number }>({ id: "", time: 0 })
   const handleShapeSelect = useCallback(
-    (id: string) => {
+    (id: string, nativeEvent?: MouseEvent) => {
+      const now = Date.now()
+      if (lastSelectRef.current.id === id && now - lastSelectRef.current.time < 100) return
+      lastSelectRef.current = { id, time: now }
+
       if (currentTool === "select") {
-        engine.selectShape(id)
+        if (nativeEvent && (nativeEvent.shiftKey || nativeEvent.metaKey)) {
+          engine.toggleShapeSelection(id, 10)
+        } else {
+          engine.selectShape(id)
+        }
       }
     },
     [engine, currentTool]
@@ -315,6 +337,32 @@ export function KonvaCanvas() {
               isDraggable={isDraggable}
             />
           ))}
+
+          {/* Provenance lines */}
+          {showProvenanceLines && shapes.map((shape) => {
+            const props = shape.props as GeneratedImageProps
+            if (!props.sourceShapeIds || props.sourceShapeIds.length === 0) return null
+            const targetBounds = engine.getShapePageBounds(shape.id)
+            if (!targetBounds) return null
+            const targetCx = targetBounds.x + targetBounds.w / 2
+            const targetCy = targetBounds.y + targetBounds.h / 2
+            return props.sourceShapeIds.map((srcId) => {
+              const srcBounds = engine.getShapePageBounds(srcId)
+              if (!srcBounds) return null
+              const srcCx = srcBounds.x + srcBounds.w / 2
+              const srcCy = srcBounds.y + srcBounds.h / 2
+              return (
+                <Line
+                  key={`prov-${srcId}-${shape.id}`}
+                  points={[srcCx, srcCy, targetCx, targetCy]}
+                  stroke="rgba(120,130,255,0.3)"
+                  strokeWidth={1.5 / camera.z}
+                  dash={[8 / camera.z, 4 / camera.z]}
+                  listening={false}
+                />
+              )
+            })
+          })}
 
           {/* Transformer */}
           <Transformer
