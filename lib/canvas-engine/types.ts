@@ -41,6 +41,7 @@ export interface GeneratedImageProps {
   seed: number
   isLoading: boolean
   sourceFormat?: "raster" | "svg"
+  sourceShapeIds?: string[]
 }
 
 export interface CanvasFrameProps {
@@ -87,6 +88,7 @@ export interface CanvasEngine {
   // Selection
   getSelectedShapeIds(): string[]
   selectShape(id: string): void
+  toggleShapeSelection(id: string, maxSelection?: number): void
   deselectAll(): void
 
   // Tools

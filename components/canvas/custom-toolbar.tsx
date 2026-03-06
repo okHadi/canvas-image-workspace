@@ -15,12 +15,13 @@ import {
   PanelRightOpen,
   PanelRightClose,
   ImagePlus,
+  GitBranch,
 } from "lucide-react"
 import { useRef } from "react"
 
 export function CustomToolbar() {
   const engine = useCanvasEngine()
-  const { sidebarOpen, toggleSidebar, addGeneratedImage } = useAppStore()
+  const { sidebarOpen, toggleSidebar, addGeneratedImage, showProvenanceLines, setShowProvenanceLines } = useAppStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleAddImage = () => {
@@ -185,6 +186,13 @@ export function CustomToolbar() {
         accept="image/*"
         onChange={handleImageFileChange}
         style={{ display: "none" }}
+      />
+      <ToolbarDivider />
+      <ToolbarButton
+        icon={<GitBranch size={18} />}
+        label="Provenance Lines"
+        active={showProvenanceLines}
+        onClick={() => setShowProvenanceLines(!showProvenanceLines)}
       />
       <ToolbarDivider />
       <ToolbarButton

@@ -10,7 +10,7 @@ import type { CanvasShape } from "@/lib/canvas-engine/types"
 interface Props {
   shape: CanvasShape
   isSelected: boolean
-  onSelect: (id: string) => void
+  onSelect: (id: string, e?: MouseEvent) => void
   onDragEnd: (id: string, x: number, y: number) => void
   onTextChange: (id: string, text: string) => void
   isDraggable: boolean

@@ -91,6 +91,9 @@ interface AppState {
   brushTargetShapeId: string | null
   setBrushTargetShapeId: (id: string | null) => void
 
+  showProvenanceLines: boolean
+  setShowProvenanceLines: (show: boolean) => void
+
   mockupMode: boolean
   activeMockupShapeId: string | null
   mockupShapes: Map<string, MockupData>
@@ -191,6 +194,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   setBrushMode: (mode) => set({ brushMode: mode }),
   brushTargetShapeId: null,
   setBrushTargetShapeId: (id) => set({ brushTargetShapeId: id }),
+
+  showProvenanceLines: true,
+  setShowProvenanceLines: (show) => set({ showProvenanceLines: show }),
 
   mockupMode: false,
   activeMockupShapeId: null,

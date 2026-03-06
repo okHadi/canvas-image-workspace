@@ -111,6 +111,18 @@ export function CanvasEngineProvider({ children }: { children: React.ReactNode }
         notify()
       },
 
+      toggleShapeSelection(id, maxSelection = 10) {
+        const current = store.getState().selectedShapeIds
+        const newSet = new Set(current)
+        if (newSet.has(id)) {
+          newSet.delete(id)
+        } else if (newSet.size < maxSelection) {
+          newSet.add(id)
+        }
+        store.getState().setSelectedShapeIds(newSet)
+        notify()
+      },
+
       deselectAll() {
         store.getState().setSelectedShapeIds(new Set())
         notify()

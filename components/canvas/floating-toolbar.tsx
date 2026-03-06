@@ -39,7 +39,11 @@ export function FloatingToolbar() {
   const selectedShapeIds = useCanvasValue("selected ids", (e) => e.getSelectedShapeIds(), [])
   const cameraZ = useCanvasValue("camera z", (e) => e.getCamera().z, [])
 
-  if (selectedShapeIds.length !== 1) return null
+  if (selectedShapeIds.length === 0) return null
+
+  if (selectedShapeIds.length >= 2) {
+    return <MultiSelectToolbar selectedShapeIds={selectedShapeIds} />
+  }
 
   const shapeId = selectedShapeIds[0]
   const shape = engine.getShape(shapeId)
@@ -73,6 +77,194 @@ export function FloatingToolbar() {
   }
 
   return null
+}
+
+function MultiSelectToolbar({ selectedShapeIds }: { selectedShapeIds: string[] }) {
+  const engine = useCanvasEngine()
+  const { addProcessingShape, removeProcessingShape, addGeneratedImage } = useAppStore()
+  const [showPromptInput, setShowPromptInput] = useState(false)
+  const [remixPrompt, setRemixPrompt] = useState("")
+
+  // Compute union bounding box of all selected shapes
+  const unionBounds = React.useMemo(() => {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const id of selectedShapeIds) {
+      const b = engine.getShapePageBounds(id)
+      if (!b) continue
+      minX = Math.min(minX, b.x)
+      minY = Math.min(minY, b.y)
+      maxX = Math.max(maxX, b.x + b.w)
+      maxY = Math.max(maxY, b.y + b.h)
+    }
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+  }, [selectedShapeIds, engine])
+
+  const screenPoint = engine.pageToScreen({ x: unionBounds.x + unionBounds.w / 2, y: unionBounds.y })
+
+  const handleRemix = useCallback(async () => {
+    if (!remixPrompt.trim()) return
+    const tempId = "remix-" + Math.random().toString(36).slice(2, 9)
+    addProcessingShape(tempId)
+    setShowPromptInput(false)
+
+    await mockDelay(1500, 2500)
+
+    const w = Math.round(Math.min(unionBounds.w, 768))
+    const h = Math.round(Math.min(unionBounds.h, 768))
+    const seed = getNextSeed()
+    const imageUrl = getPicsumUrl(w || 512, h || 512, seed)
+
+    const newShape = engine.createShape({
+      type: GENERATED_IMAGE_TYPE,
+      x: unionBounds.x + unionBounds.w + 40,
+      y: unionBounds.y,
+      props: {
+        w: w || 512,
+        h: h || 512,
+        imageUrl,
+        prompt: remixPrompt,
+        style: "Realistic" as const,
+        model: "Standard" as const,
+        aspectRatio: "1:1" as const,
+        seed,
+        isLoading: false,
+        sourceShapeIds: [...selectedShapeIds],
+      },
+    })
+
+    addGeneratedImage({
+      id: newShape.id,
+      prompt: remixPrompt,
+      model: "Standard",
+      style: "Realistic",
+      aspectRatio: "1:1",
+      imageUrl,
+      seed,
+    })
+
+    engine.selectShape(newShape.id)
+    removeProcessingShape(tempId)
+    setRemixPrompt("")
+  }, [remixPrompt, selectedShapeIds, unionBounds, engine, addProcessingShape, removeProcessingShape, addGeneratedImage])
+
+  const handleDeleteAll = useCallback(() => {
+    for (const id of selectedShapeIds) {
+      engine.deleteShape(id)
+    }
+  }, [selectedShapeIds, engine])
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: screenPoint.x,
+        top: screenPoint.y - 56,
+        transform: "translateX(-50%)",
+        zIndex: 400,
+        fontFamily: "system-ui, sans-serif",
+        pointerEvents: "all",
+      }}
+    >
+      {showPromptInput && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 8px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#1a1a2e",
+            borderRadius: 10,
+            padding: 8,
+            border: "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            gap: 6,
+            width: 280,
+          }}
+        >
+          <input
+            type="text"
+            value={remixPrompt}
+            onChange={(e) => setRemixPrompt(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleRemix()}
+            placeholder="Describe your remix..."
+            autoFocus
+            style={{
+              flex: 1,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 6,
+              padding: "6px 10px",
+              color: "#e0e0f0",
+              fontSize: 12,
+              outline: "none",
+              fontFamily: "system-ui, sans-serif",
+            }}
+          />
+          <button
+            onClick={handleRemix}
+            style={{
+              background: "rgba(120,130,255,0.2)",
+              border: "none",
+              borderRadius: 6,
+              padding: "6px 8px",
+              color: "#a0a8ff",
+              cursor: "pointer",
+              display: "flex",
+            }}
+          >
+            <Send size={14} />
+          </button>
+          <button
+            onClick={() => setShowPromptInput(false)}
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              border: "none",
+              borderRadius: 6,
+              padding: "6px 8px",
+              color: "#666680",
+              cursor: "pointer",
+              display: "flex",
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          background: "#1a1a2e",
+          borderRadius: 10,
+          padding: "4px 6px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 11,
+            color: "#a0a8ff",
+            padding: "0 8px",
+            whiteSpace: "nowrap",
+            fontWeight: 600,
+          }}
+        >
+          {selectedShapeIds.length} selected
+        </span>
+        <FloatDivider />
+        <FloatBtn
+          icon={<Blend size={14} />}
+          label="Remix"
+          onClick={() => setShowPromptInput(!showPromptInput)}
+          active={showPromptInput}
+        />
+        <FloatDivider />
+        <FloatBtn icon={<Trash2 size={14} />} label="Delete All" onClick={handleDeleteAll} danger />
+      </div>
+    </div>
+  )
 }
 
 function GeneratedImageToolbar({
@@ -531,6 +723,14 @@ function GeneratedImageToolbar({
         <FloatBtn icon={<Shuffle size={14} />} label="Variations" onClick={handleVariations} />
         <FloatDivider />
         <FloatBtn icon={<Trash2 size={14} />} label="Delete" onClick={handleDelete} danger />
+        {shape.props.sourceShapeIds && shape.props.sourceShapeIds.length > 0 && (
+          <>
+            <FloatDivider />
+            <span style={{ fontSize: 10, color: "#8888aa", padding: "0 6px", whiteSpace: "nowrap" }}>
+              {shape.props.sourceShapeIds.length} source{shape.props.sourceShapeIds.length !== 1 ? "s" : ""}
+            </span>
+          </>
+        )}
       </div>
     </div>
   )
