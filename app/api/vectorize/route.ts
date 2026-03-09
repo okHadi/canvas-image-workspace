@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server"
 const DEPTH_SERVER = "http://localhost:8100"
 
 export async function POST(req: NextRequest) {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+    return NextResponse.json({ error: "Demo mode" }, { status: 503 })
+  }
+
   try {
     const body = await req.json()
 
