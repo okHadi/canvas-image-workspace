@@ -84,6 +84,7 @@ function MultiSelectToolbar({ selectedShapeIds }: { selectedShapeIds: string[] }
   const { addProcessingShape, removeProcessingShape, addGeneratedImage } = useAppStore()
   const [showPromptInput, setShowPromptInput] = useState(false)
   const [remixPrompt, setRemixPrompt] = useState("")
+  const [showFormatPicker, setShowFormatPicker] = useState(false)
 
   // Compute union bounding box of all selected shapes
   const unionBounds = React.useMemo(() => {
@@ -153,6 +154,54 @@ function MultiSelectToolbar({ selectedShapeIds }: { selectedShapeIds: string[] }
     }
   }, [selectedShapeIds, engine])
 
+  const handleDownloadAll = useCallback(async (format: "png" | "jpg" | "svg") => {
+    setShowFormatPicker(false)
+    for (const id of selectedShapeIds) {
+      const shape = engine.getShape(id)
+      if (!shape || shape.type !== GENERATED_IMAGE_TYPE) continue
+      const imageUrl = (shape.props as any).imageUrl as string
+      const sourceFormat = (shape.props as any).sourceFormat as string | undefined
+
+      if (format === "svg" && sourceFormat === "svg") {
+        // Export SVG source directly
+        const base64 = imageUrl.split(",")[1]
+        const svgString = decodeURIComponent(escape(atob(base64)))
+        const blob = new Blob([svgString], { type: "image/svg+xml" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = `image-${id}.svg`
+        link.click()
+        URL.revokeObjectURL(url)
+      } else {
+        // Convert to PNG or JPG via canvas
+        const img = new Image()
+        img.crossOrigin = "anonymous"
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve()
+          img.onerror = () => resolve()
+          img.src = imageUrl
+        })
+        if (img.naturalWidth === 0) continue
+        const canvas = document.createElement("canvas")
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        const ctx = canvas.getContext("2d")!
+        if (format === "jpg") {
+          ctx.fillStyle = "#ffffff"
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+        }
+        ctx.drawImage(img, 0, 0)
+        const mimeType = format === "jpg" ? "image/jpeg" : "image/png"
+        const dataUrl = canvas.toDataURL(mimeType, format === "jpg" ? 0.92 : undefined)
+        const link = document.createElement("a")
+        link.href = dataUrl
+        link.download = `image-${id}.${format}`
+        link.click()
+      }
+    }
+  }, [selectedShapeIds, engine])
+
   return (
     <div
       style={{
@@ -165,6 +214,57 @@ function MultiSelectToolbar({ selectedShapeIds }: { selectedShapeIds: string[] }
         pointerEvents: "all",
       }}
     >
+      {showFormatPicker && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#1a1a2e",
+            borderRadius: 10,
+            padding: 4,
+            border: "1px solid rgba(255,255,255,0.08)",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            minWidth: 140,
+          }}
+        >
+          {(["png", "jpg", "svg"] as const).map((fmt) => (
+            <button
+              key={fmt}
+              onClick={() => handleDownloadAll(fmt)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                background: "transparent",
+                border: "none",
+                borderRadius: 6,
+                color: "#ccccdd",
+                fontSize: 12,
+                fontFamily: "system-ui, sans-serif",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(255,255,255,0.06)"
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent"
+              }}
+            >
+              <span style={{ color: "#8888aa", display: "flex" }}><Download size={14} /></span>
+              Download as .{fmt.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      )}
+
       {showPromptInput && (
         <div
           style={{
@@ -257,8 +357,14 @@ function MultiSelectToolbar({ selectedShapeIds }: { selectedShapeIds: string[] }
         <FloatBtn
           icon={<Blend size={14} />}
           label="Remix"
-          onClick={() => setShowPromptInput(!showPromptInput)}
+          onClick={() => { setShowPromptInput(!showPromptInput); setShowFormatPicker(false) }}
           active={showPromptInput}
+        />
+        <FloatBtn
+          icon={<Download size={14} />}
+          label="Download"
+          onClick={() => { setShowFormatPicker(!showFormatPicker); setShowPromptInput(false) }}
+          active={showFormatPicker}
         />
         <FloatDivider />
         <FloatBtn icon={<Trash2 size={14} />} label="Delete All" onClick={handleDeleteAll} danger />
