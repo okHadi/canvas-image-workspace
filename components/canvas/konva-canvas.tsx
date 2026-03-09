@@ -26,6 +26,10 @@ export function KonvaCanvas() {
 
   const showProvenanceLines = useAppStore((s) => s.showProvenanceLines)
 
+  // Marquee selection state
+  const marqueeRef = useRef<{ startX: number; startY: number; active: boolean }>({ startX: 0, startY: 0, active: false })
+  const [marqueeRect, setMarqueeRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+
   // Window resize
   useEffect(() => {
     const handleResize = () => {
@@ -172,12 +176,28 @@ export function KonvaCanvas() {
     }
   }, [engine])
 
-  // Draw tool handlers
+  // Draw tool handlers + marquee selection
   const handleMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
-      if (currentTool !== "draw") return
       const stage = stageRef.current
       if (!stage) return
+
+      // Marquee selection: start when clicking empty space with select tool
+      if (currentTool === "select") {
+        const target = e.target
+        const isEmptyArea = target === stage || (target.getClassName() === "Rect" && target.id() === "background")
+        if (isEmptyArea) {
+          const pointer = stage.getPointerPosition()
+          if (pointer) {
+            const pagePoint = engine.screenToPage(pointer)
+            marqueeRef.current = { startX: pagePoint.x, startY: pagePoint.y, active: true }
+            setMarqueeRect({ x: pagePoint.x, y: pagePoint.y, w: 0, h: 0 })
+          }
+        }
+        return
+      }
+
+      if (currentTool !== "draw") return
 
       const pointer = stage.getPointerPosition()
       if (!pointer) return
@@ -203,9 +223,26 @@ export function KonvaCanvas() {
 
   const handleMouseMove = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
-      if (currentTool !== "draw" || !drawingShapeIdRef.current) return
       const stage = stageRef.current
       if (!stage) return
+
+      // Marquee drag
+      if (marqueeRef.current.active && currentTool === "select") {
+        const pointer = stage.getPointerPosition()
+        if (!pointer) return
+        const pagePoint = engine.screenToPage(pointer)
+        const sx = marqueeRef.current.startX
+        const sy = marqueeRef.current.startY
+        setMarqueeRect({
+          x: Math.min(sx, pagePoint.x),
+          y: Math.min(sy, pagePoint.y),
+          w: Math.abs(pagePoint.x - sx),
+          h: Math.abs(pagePoint.y - sy),
+        })
+        return
+      }
+
+      if (currentTool !== "draw" || !drawingShapeIdRef.current) return
 
       const pointer = stage.getPointerPosition()
       if (!pointer) return
@@ -228,6 +265,31 @@ export function KonvaCanvas() {
   )
 
   const handleMouseUp = useCallback(() => {
+    // Finish marquee selection
+    if (marqueeRef.current.active && marqueeRect) {
+      marqueeRef.current.active = false
+      if (marqueeRect.w > 5 || marqueeRect.h > 5) {
+        // Find all shapes that intersect the marquee rectangle
+        const allShapes = engine.getAllShapes()
+        const hits: string[] = []
+        for (const shape of allShapes) {
+          const bounds = engine.getShapePageBounds(shape.id)
+          if (!bounds) continue
+          // Check overlap
+          const overlapX = marqueeRect.x < bounds.x + bounds.w && marqueeRect.x + marqueeRect.w > bounds.x
+          const overlapY = marqueeRect.y < bounds.y + bounds.h && marqueeRect.y + marqueeRect.h > bounds.y
+          if (overlapX && overlapY) {
+            hits.push(shape.id)
+          }
+        }
+        if (hits.length > 0) {
+          engine.selectShapes(hits)
+        }
+      }
+      setMarqueeRect(null)
+      return
+    }
+
     if (currentTool === "draw" && drawingShapeIdRef.current) {
       const drawShape = engine.getShape(drawingShapeIdRef.current)
       if (drawShape) {
@@ -363,6 +425,21 @@ export function KonvaCanvas() {
               )
             })
           })}
+
+          {/* Marquee selection rectangle */}
+          {marqueeRect && marqueeRect.w > 0 && marqueeRect.h > 0 && (
+            <Rect
+              x={marqueeRect.x}
+              y={marqueeRect.y}
+              width={marqueeRect.w}
+              height={marqueeRect.h}
+              fill="rgba(120,130,255,0.08)"
+              stroke="rgba(120,130,255,0.5)"
+              strokeWidth={1 / camera.z}
+              dash={[6 / camera.z, 3 / camera.z]}
+              listening={false}
+            />
+          )}
 
           {/* Transformer */}
           <Transformer

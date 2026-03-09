@@ -9,7 +9,14 @@ let cachedDemoResponse: Record<string, unknown> | null = null
 function getDemoDepthResponse() {
   if (cachedDemoResponse) return cachedDemoResponse
   const filePath = join(process.cwd(), "public", "demo-depth-data.json")
-  cachedDemoResponse = JSON.parse(readFileSync(filePath, "utf-8"))
+  const data = JSON.parse(readFileSync(filePath, "utf-8"))
+  // Include the mug base image so the mockup preview shows the correct product
+  const mugPath = join(process.cwd(), "public", "demo-depth-preview.jpg")
+  try {
+    data.base_image = readFileSync(mugPath).toString("base64")
+    data.base_image_format = "jpeg"
+  } catch { /* preview image optional */ }
+  cachedDemoResponse = data
   return cachedDemoResponse
 }
 

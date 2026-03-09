@@ -88,6 +88,7 @@ export interface CanvasEngine {
   // Selection
   getSelectedShapeIds(): string[]
   selectShape(id: string): void
+  selectShapes(ids: string[]): void
   toggleShapeSelection(id: string, maxSelection?: number): void
   deselectAll(): void
 

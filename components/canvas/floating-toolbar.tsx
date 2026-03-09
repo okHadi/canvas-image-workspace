@@ -511,7 +511,12 @@ function GeneratedImageToolbar({
         garmentMaskHeight = data.height
       }
 
-      setMockupDepth(shapeId, depthMapUrl, depthFloat32, data.width, data.height, garmentMaskUrl, garmentMask, garmentMaskWidth, garmentMaskHeight)
+      // In demo mode, the API returns a base_image (mug photo) to use instead of the selected shape
+      const baseImageUrl = data.base_image
+        ? `data:image/${data.base_image_format || "jpeg"};base64,${data.base_image}`
+        : null
+
+      setMockupDepth(shapeId, depthMapUrl, depthFloat32, data.width, data.height, garmentMaskUrl, garmentMask, garmentMaskWidth, garmentMaskHeight, baseImageUrl)
     } catch (e) {
       alert("Failed to connect to depth server. Make sure it is running on port 8100.")
     }

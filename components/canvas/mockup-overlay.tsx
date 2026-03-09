@@ -40,8 +40,9 @@ export function MockupOverlay() {
     const img = new Image()
     img.crossOrigin = "anonymous"
     img.onload = () => setBaseImage(img)
-    img.src = (shape.props as any).imageUrl
-  }, [shapeId, mockupMode, engine])
+    // In demo mode, use the product base image (mug) from depth API if available
+    img.src = mockupData?.baseImageUrl || (shape.props as any).imageUrl
+  }, [shapeId, mockupMode, engine, mockupData?.baseImageUrl])
 
   // Render the canvas preview
   const renderPreview = useCallback(() => {

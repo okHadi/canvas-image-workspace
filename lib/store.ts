@@ -19,6 +19,7 @@ export interface MockupData {
   garmentMask: Uint8Array | null
   garmentMaskWidth: number
   garmentMaskHeight: number
+  baseImageUrl: string | null // override base image (e.g. mug photo in demo mode)
   overlayImageUrl: string | null
   overlayImageElement: HTMLImageElement | null
   overlayX: number // 0-1 normalized
@@ -97,7 +98,7 @@ interface AppState {
   mockupMode: boolean
   activeMockupShapeId: string | null
   mockupShapes: Map<string, MockupData>
-  setMockupDepth: (shapeId: string, depthMapUrl: string, depthData: Float32Array, depthWidth: number, depthHeight: number, garmentMaskUrl?: string | null, garmentMask?: Uint8Array | null, garmentMaskWidth?: number, garmentMaskHeight?: number) => void
+  setMockupDepth: (shapeId: string, depthMapUrl: string, depthData: Float32Array, depthWidth: number, depthHeight: number, garmentMaskUrl?: string | null, garmentMask?: Uint8Array | null, garmentMaskWidth?: number, garmentMaskHeight?: number, baseImageUrl?: string | null) => void
   setMockupOverlay: (shapeId: string, imageUrl: string, imageElement: HTMLImageElement) => void
   updateOverlayPosition: (shapeId: string, x: number, y: number) => void
   updateOverlayScale: (shapeId: string, scale: number) => void
@@ -201,7 +202,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   mockupMode: false,
   activeMockupShapeId: null,
   mockupShapes: new Map(),
-  setMockupDepth: (shapeId, depthMapUrl, depthData, depthWidth, depthHeight, garmentMaskUrl = null, garmentMask = null, garmentMaskWidth = 0, garmentMaskHeight = 0) =>
+  setMockupDepth: (shapeId, depthMapUrl, depthData, depthWidth, depthHeight, garmentMaskUrl = null, garmentMask = null, garmentMaskWidth = 0, garmentMaskHeight = 0, baseImageUrl = null) =>
     set((s) => {
       const newMap = new Map(s.mockupShapes)
       newMap.set(shapeId, {
@@ -213,6 +214,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         garmentMask,
         garmentMaskWidth,
         garmentMaskHeight,
+        baseImageUrl,
         overlayImageUrl: null,
         overlayImageElement: null,
         overlayX: 0.5,
