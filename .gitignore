@@ -16,3 +16,4 @@ node_modules/
 depthv2/depthv2/
 depthv2/Depth-Anything-V2/checkpoints/
 depthv2/Depth-Anything-V2/venv/
+.vercel

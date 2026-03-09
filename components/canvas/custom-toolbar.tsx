@@ -146,12 +146,14 @@ export function CustomToolbar() {
         label="Select"
         active={currentTool === "select"}
         onClick={() => engine.setCurrentTool("select")}
+        shortcut="V"
       />
       <ToolbarButton
         icon={<Hand size={18} />}
         label="Pan"
         active={currentTool === "hand"}
         onClick={() => engine.setCurrentTool("hand")}
+        shortcut="H"
       />
       <ToolbarDivider />
       <ToolbarButton
@@ -216,17 +218,20 @@ function ToolbarButton({
   label,
   active = false,
   onClick,
+  shortcut,
 }: {
   icon: React.ReactNode
   label: string
   active?: boolean
   onClick: () => void
+  shortcut?: string
 }) {
   return (
     <button
       onClick={onClick}
-      title={label}
+      title={shortcut ? `${label} (${shortcut})` : label}
       style={{
+        position: "relative",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -253,6 +258,22 @@ function ToolbarButton({
       }}
     >
       {icon}
+      {shortcut && (
+        <span
+          style={{
+            position: "absolute",
+            bottom: 2,
+            right: 2,
+            fontSize: 9,
+            fontFamily: "monospace",
+            color: "#666680",
+            lineHeight: 1,
+            pointerEvents: "none",
+          }}
+        >
+          {shortcut}
+        </span>
+      )}
       <span className="sr-only">{label}</span>
     </button>
   )

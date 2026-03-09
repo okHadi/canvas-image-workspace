@@ -74,13 +74,14 @@ export interface CanvasShape {
   x: number
   y: number
   props: ShapeProps
+  parentFrameId?: string
 }
 
 export interface CanvasEngine {
   // Shape CRUD
   createShape(partial: Partial<CanvasShape> & { type: ShapeType }): CanvasShape
   createShapes(partials: (Partial<CanvasShape> & { type: ShapeType })[]): CanvasShape[]
-  updateShape(partial: { id: string; type?: ShapeType; x?: number; y?: number; props?: Partial<ShapeProps> }): void
+  updateShape(partial: { id: string; type?: ShapeType; x?: number; y?: number; props?: Partial<ShapeProps>; parentFrameId?: string }): void
   deleteShape(id: string): void
   getShape(id: string): CanvasShape | undefined
   getAllShapes(): CanvasShape[]

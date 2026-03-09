@@ -69,6 +69,7 @@ export function CanvasEngineProvider({ children }: { children: React.ReactNode }
           ...(partial.x !== undefined ? { x: partial.x } : {}),
           ...(partial.y !== undefined ? { y: partial.y } : {}),
           ...(partial.type !== undefined ? { type: partial.type } : {}),
+          ...("parentFrameId" in partial ? { parentFrameId: partial.parentFrameId } : {}),
           props: partial.props ? { ...existing.props, ...partial.props } : existing.props,
         }
         state.updateShapeInStore(updated)

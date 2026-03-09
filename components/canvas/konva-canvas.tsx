@@ -4,7 +4,8 @@ import React, { useRef, useEffect, useState, useCallback } from "react"
 import { Stage, Layer, Circle, Transformer, Rect, Line } from "react-konva"
 import { useCanvasEngine, useCanvasValue } from "@/lib/canvas-engine"
 import { ShapeRenderer } from "./shapes/shape-renderer"
-import type { CanvasShape, DrawProps, GeneratedImageProps } from "@/lib/canvas-engine/types"
+import type { CanvasShape, DrawProps, GeneratedImageProps, CanvasFrameProps } from "@/lib/canvas-engine/types"
+import { CANVAS_FRAME_TYPE } from "@/lib/canvas-engine/types"
 import { useAppStore } from "@/lib/store"
 import type Konva from "konva"
 
@@ -26,6 +27,13 @@ export function KonvaCanvas() {
 
   const showProvenanceLines = useAppStore((s) => s.showProvenanceLines)
 
+  // Spacebar hold: temporary hand tool
+  const prevToolRef = useRef<string | null>(null)
+  // Hovered frame for magnetic snap visual feedback
+  const [hoveredFrameId, setHoveredFrameId] = useState<string | null>(null)
+  // Track whether a shape is being dragged (for hover frame detection)
+  const isDraggingShapeRef = useRef(false)
+
   // Marquee selection state
   const marqueeRef = useRef<{ startX: number; startY: number; active: boolean }>({ startX: 0, startY: 0, active: false })
   const [marqueeRect, setMarqueeRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
@@ -38,6 +46,65 @@ export function KonvaCanvas() {
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
   }, [])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const isInputFocused = () => {
+      const el = document.activeElement
+      if (!el) return false
+      const tag = el.tagName.toLowerCase()
+      return tag === "input" || tag === "textarea" || (el as HTMLElement).isContentEditable
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isInputFocused()) return
+
+      // Spacebar hold → temporary hand tool
+      if (e.key === " " && !e.repeat) {
+        e.preventDefault()
+        prevToolRef.current = engine.getCurrentToolId()
+        engine.setCurrentTool("hand")
+        return
+      }
+
+      const key = e.key.toLowerCase()
+
+      if (key === "v") { engine.setCurrentTool("select"); return }
+      if (key === "h") { engine.setCurrentTool("hand"); return }
+      if (key === "d") { engine.setCurrentTool("draw"); return }
+      if (key === "escape") { engine.deselectAll(); return }
+      if (key === "delete" || key === "backspace") {
+        e.preventDefault()
+        const ids = engine.getSelectedShapeIds()
+        for (const id of ids) engine.deleteShape(id)
+        return
+      }
+      if (key === "a" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        engine.selectShapes(engine.getAllShapes().map((s) => s.id))
+        return
+      }
+      // Shift+1 → zoom to fit
+      if (key === "!" || (e.shiftKey && key === "1")) {
+        engine.zoomToFit()
+        return
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === " " && prevToolRef.current !== null) {
+        engine.setCurrentTool(prevToolRef.current as any)
+        prevToolRef.current = null
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    window.addEventListener("keyup", handleKeyUp)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("keyup", handleKeyUp)
+    }
+  }, [engine])
 
   // Attach transformer to selected nodes
   useEffect(() => {
@@ -129,10 +196,57 @@ export function KonvaCanvas() {
     [engine, currentTool]
   )
 
-  // Shape drag end
+  // Shape drag end — with frame snap / breakout
   const handleShapeDragEnd = useCallback(
     (id: string, x: number, y: number) => {
-      engine.updateShape({ id, x, y })
+      isDraggingShapeRef.current = false
+      setHoveredFrameId(null)
+
+      const shape = engine.getShape(id)
+      if (!shape) { engine.updateShape({ id, x, y }); return }
+
+      const props = shape.props as any
+      const sw = props.w || 100
+      const sh = props.h || 40
+      const cx = x + sw / 2
+      const cy = y + sh / 2
+
+      const frames = engine.getAllShapes().filter(
+        (s) => s.type === CANVAS_FRAME_TYPE && s.id !== id
+      )
+
+      // Check if center is inside any frame
+      let snappedFrameId: string | undefined
+      for (const frame of frames) {
+        const fp = frame.props as CanvasFrameProps
+        if (
+          cx >= frame.x &&
+          cx <= frame.x + fp.w &&
+          cy >= frame.y &&
+          cy <= frame.y + fp.h
+        ) {
+          snappedFrameId = frame.id
+          break
+        }
+      }
+
+      // Breakout check: if already in a frame, compute overlap
+      if (shape.parentFrameId && !snappedFrameId) {
+        const parentFrame = engine.getShape(shape.parentFrameId)
+        if (parentFrame) {
+          const fp = parentFrame.props as CanvasFrameProps
+          const overlapX = Math.max(0, Math.min(x + sw, parentFrame.x + fp.w) - Math.max(x, parentFrame.x))
+          const overlapY = Math.max(0, Math.min(y + sh, parentFrame.y + fp.h) - Math.max(y, parentFrame.y))
+          const overlapArea = overlapX * overlapY
+          const shapeArea = sw * sh
+          if (shapeArea > 0 && overlapArea / shapeArea >= 0.5) {
+            // Still mostly inside — keep parent
+            snappedFrameId = shape.parentFrameId
+          }
+        }
+      }
+
+      engine.updateShape({ id, x, y, parentFrameId: snappedFrameId })
     },
     [engine]
   )
@@ -226,6 +340,29 @@ export function KonvaCanvas() {
       const stage = stageRef.current
       if (!stage) return
 
+      // Hover frame detection while dragging a shape
+      if (isDraggingShapeRef.current) {
+        const pointer = stage.getPointerPosition()
+        if (pointer) {
+          const pagePoint = engine.screenToPage(pointer)
+          const frames = engine.getAllShapes().filter((s) => s.type === CANVAS_FRAME_TYPE)
+          let found: string | null = null
+          for (const frame of frames) {
+            const fp = frame.props as CanvasFrameProps
+            if (
+              pagePoint.x >= frame.x &&
+              pagePoint.x <= frame.x + fp.w &&
+              pagePoint.y >= frame.y &&
+              pagePoint.y <= frame.y + fp.h
+            ) {
+              found = frame.id
+              break
+            }
+          }
+          setHoveredFrameId(found)
+        }
+      }
+
       // Marquee drag
       if (marqueeRef.current.active && currentTool === "select") {
         const pointer = stage.getPointerPosition()
@@ -315,6 +452,16 @@ export function KonvaCanvas() {
     }
   }, [engine, currentTool])
 
+  // Track shape drag start at stage level
+  const handleStageDragStart = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      if (e.target !== stageRef.current) {
+        isDraggingShapeRef.current = true
+      }
+    },
+    []
+  )
+
   // Hand tool - stage dragging
   const isHandTool = currentTool === "hand"
 
@@ -371,6 +518,7 @@ export function KonvaCanvas() {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onDragStart={handleStageDragStart}
         onDragEnd={handleStageDragEnd}
       >
         {/* Grid layer */}
@@ -440,6 +588,26 @@ export function KonvaCanvas() {
               listening={false}
             />
           )}
+
+          {/* Hovered frame highlight during drag */}
+          {hoveredFrameId && (() => {
+            const frame = engine.getShape(hoveredFrameId)
+            if (!frame) return null
+            const fp = frame.props as CanvasFrameProps
+            return (
+              <Rect
+                x={frame.x}
+                y={frame.y}
+                width={fp.w}
+                height={fp.h}
+                stroke="#7882ff"
+                strokeWidth={2 / camera.z}
+                fill="rgba(120,130,255,0.05)"
+                dash={[8 / camera.z, 4 / camera.z]}
+                listening={false}
+              />
+            )
+          })()}
 
           {/* Transformer */}
           <Transformer
