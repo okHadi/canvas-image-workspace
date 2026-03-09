@@ -491,8 +491,7 @@ function GeneratedImageToolbar({
       }
       const depthFloat32 = new Float32Array(bytes.buffer)
 
-      const depthFormat = data.depth_map_format || "png"
-      const depthMapUrl = `data:image/${depthFormat};base64,${data.depth_map_image}`
+      const depthMapUrl = `data:image/png;base64,${data.depth_map_image}`
 
       // Decode garment mask if present
       let garmentMaskUrl: string | null = null
