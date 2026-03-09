@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { deflateSync } from "zlib"
+import { readFileSync } from "fs"
+import { join } from "path"
 
 const DEPTH_SERVER = "http://localhost:8100"
 
@@ -108,14 +110,27 @@ function generateDemoDepthResponse() {
   const maskPixels = new Uint8Array(W * H).fill(255)
   const maskFloat = new Uint8Array(W * H).fill(255)
 
-  const depthPng = createGrayscalePng(W, H, depthPixels)
   const maskPng = createGrayscalePng(W, H, maskPixels)
 
   const depthDataBase64 = Buffer.from(depthFloat.buffer).toString("base64")
   const maskDataBase64 = Buffer.from(maskFloat.buffer).toString("base64")
 
+  // Use the mug photo as the depth map preview image
+  let previewBase64: string
+  let previewFormat = "jpeg"
+  try {
+    const previewPath = join(process.cwd(), "public", "demo-depth-preview.jpg")
+    previewBase64 = readFileSync(previewPath).toString("base64")
+  } catch {
+    // Fallback to generated grayscale PNG if file not found
+    const depthPng = createGrayscalePng(W, H, depthPixels)
+    previewBase64 = depthPng.toString("base64")
+    previewFormat = "png"
+  }
+
   return {
-    depth_map_image: depthPng.toString("base64"),
+    depth_map_image: previewBase64,
+    depth_map_format: previewFormat,
     depth_data: depthDataBase64,
     width: W,
     height: H,

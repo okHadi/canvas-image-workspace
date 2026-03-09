@@ -389,7 +389,47 @@ function GeneratedImageToolbar({
   const [showPromptInput, setShowPromptInput] = useState(false)
   const [editPrompt, setEditPrompt] = useState("")
   const [activeSubMenu, setActiveSubMenu] = useState<string | null>(null)
+  const [showExportPicker, setShowExportPicker] = useState(false)
   const isProcessing = processingShapes.has(shapeId)
+
+  const handleExportAs = useCallback((format: "png" | "jpg" | "svg") => {
+    setShowExportPicker(false)
+    const imageUrl = shape.props.imageUrl as string
+    const sourceFormat = shape.props.sourceFormat as string | undefined
+
+    if (format === "svg" && sourceFormat === "svg") {
+      const base64 = imageUrl.split(",")[1]
+      const svgString = decodeURIComponent(escape(atob(base64)))
+      const blob = new Blob([svgString], { type: "image/svg+xml" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `generated-${shapeId}.svg`
+      link.click()
+      URL.revokeObjectURL(url)
+    } else {
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      img.onload = () => {
+        const canvas = document.createElement("canvas")
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        const ctx = canvas.getContext("2d")!
+        if (format === "jpg") {
+          ctx.fillStyle = "#ffffff"
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+        }
+        ctx.drawImage(img, 0, 0)
+        const mimeType = format === "jpg" ? "image/jpeg" : "image/png"
+        const dataUrl = canvas.toDataURL(mimeType, format === "jpg" ? 0.92 : undefined)
+        const link = document.createElement("a")
+        link.href = dataUrl
+        link.download = `generated-${shapeId}.${format}`
+        link.click()
+      }
+      img.src = imageUrl
+    }
+  }, [shape, shapeId])
 
   const handleAiTool = useCallback(
     async (toolName: string) => {
@@ -451,7 +491,8 @@ function GeneratedImageToolbar({
       }
       const depthFloat32 = new Float32Array(bytes.buffer)
 
-      const depthMapUrl = `data:image/png;base64,${data.depth_map_image}`
+      const depthFormat = data.depth_map_format || "png"
+      const depthMapUrl = `data:image/${depthFormat};base64,${data.depth_map_image}`
 
       // Decode garment mask if present
       let garmentMaskUrl: string | null = null
@@ -575,26 +616,7 @@ function GeneratedImageToolbar({
     removeProcessingShape(shapeId)
   }, [shapeId, shape, engine, addProcessingShape, removeProcessingShape, addGeneratedImage])
 
-  const handleExport = useCallback(() => {
-    if (shape.props.sourceFormat === "svg") {
-      // Decode base64 SVG and export as .svg file
-      const dataUrl = shape.props.imageUrl as string
-      const base64 = dataUrl.split(",")[1]
-      const svgString = decodeURIComponent(escape(atob(base64)))
-      const blob = new Blob([svgString], { type: "image/svg+xml" })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = `generated-${shapeId}.svg`
-      link.click()
-      URL.revokeObjectURL(url)
-    } else {
-      const link = document.createElement("a")
-      link.href = shape.props.imageUrl
-      link.download = `generated-${shapeId}.jpg`
-      link.click()
-    }
-  }, [shape, shapeId])
+  // handleExport removed — replaced by handleExportAs with format picker
 
   const handleCopyPrompt = useCallback(() => {
     navigator.clipboard.writeText(shape.props.prompt || "")
@@ -764,6 +786,57 @@ function GeneratedImageToolbar({
         </div>
       )}
 
+      {showExportPicker && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#1a1a2e",
+            borderRadius: 10,
+            padding: 4,
+            border: "1px solid rgba(255,255,255,0.08)",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            minWidth: 140,
+          }}
+        >
+          {(["png", "jpg", ...(shape.props.sourceFormat === "svg" ? ["svg"] : [])] as const).map((fmt) => (
+            <button
+              key={fmt}
+              onClick={() => handleExportAs(fmt as "png" | "jpg" | "svg")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                background: "transparent",
+                border: "none",
+                borderRadius: 6,
+                color: "#ccccdd",
+                fontSize: 12,
+                fontFamily: "system-ui, sans-serif",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(255,255,255,0.06)"
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent"
+              }}
+            >
+              <span style={{ color: "#8888aa", display: "flex" }}><Download size={14} /></span>
+              Download as .{(fmt as string).toUpperCase()}
+            </button>
+          ))}
+        </div>
+      )}
+
       {activeSubMenu === "tools" && (
         <SubMenu
           onClose={() => setActiveSubMenu(null)}
@@ -824,7 +897,12 @@ function GeneratedImageToolbar({
           active={activeSubMenu === "add"}
         />
         <FloatDivider />
-        <FloatBtn icon={<Download size={14} />} label="Export" onClick={handleExport} />
+        <FloatBtn
+          icon={<Download size={14} />}
+          label="Export"
+          onClick={() => { setShowExportPicker(!showExportPicker); setShowPromptInput(false); setActiveSubMenu(null) }}
+          active={showExportPicker}
+        />
         <FloatBtn icon={<Copy size={14} />} label="Copy Prompt" onClick={handleCopyPrompt} />
         <FloatBtn icon={<Shuffle size={14} />} label="Variations" onClick={handleVariations} />
         <FloatDivider />
