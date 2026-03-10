@@ -211,6 +211,20 @@ export function KonvaCanvas() {
       const shape = engine.getShape(id)
       if (!shape) { engine.updateShape({ id, x, y }); return }
 
+      // If dragging a frame, move all children with it
+      if (shape.type === CANVAS_FRAME_TYPE) {
+        const dx = x - shape.x
+        const dy = y - shape.y
+        engine.updateShape({ id, x, y })
+        if (dx !== 0 || dy !== 0) {
+          const children = engine.getAllShapes().filter((s) => s.parentFrameId === id)
+          for (const child of children) {
+            engine.updateShape({ id: child.id, x: child.x + dx, y: child.y + dy })
+          }
+        }
+        return
+      }
+
       const props = shape.props as any
       const sw = props.w || 100
       const sh = props.h || 40
