@@ -223,6 +223,7 @@ export function KonvaCanvas() {
 
       // Check if center is inside any frame
       let snappedFrameId: string | undefined
+      let snapFrame: CanvasShape | undefined
       for (const frame of frames) {
         const fp = frame.props as CanvasFrameProps
         if (
@@ -232,6 +233,7 @@ export function KonvaCanvas() {
           cy <= frame.y + fp.h
         ) {
           snappedFrameId = frame.id
+          snapFrame = frame
           break
         }
       }
@@ -248,11 +250,32 @@ export function KonvaCanvas() {
           if (shapeArea > 0 && overlapArea / shapeArea >= 0.5) {
             // Still mostly inside — keep parent
             snappedFrameId = shape.parentFrameId
+            snapFrame = parentFrame
           }
         }
       }
 
-      engine.updateShape({ id, x, y, parentFrameId: snappedFrameId })
+      // Magnetic snap: center the shape inside the frame if newly snapped
+      let finalX = x
+      let finalY = y
+      if (snapFrame && snappedFrameId !== shape.parentFrameId) {
+        const fp = snapFrame.props as CanvasFrameProps
+        // Center the shape within the frame
+        finalX = snapFrame.x + (fp.w - sw) / 2
+        finalY = snapFrame.y + (fp.h - sh) / 2
+        // If the shape is larger than the frame, scale it down to fit
+        if (sw > fp.w || sh > fp.h) {
+          const scale = Math.min(fp.w / sw, fp.h / sh) * 0.9
+          const newW = Math.round(sw * scale)
+          const newH = Math.round(sh * scale)
+          finalX = snapFrame.x + (fp.w - newW) / 2
+          finalY = snapFrame.y + (fp.h - newH) / 2
+          engine.updateShape({ id, x: finalX, y: finalY, parentFrameId: snappedFrameId, props: { w: newW, h: newH } })
+          return
+        }
+      }
+
+      engine.updateShape({ id, x: finalX, y: finalY, parentFrameId: snappedFrameId })
     },
     [engine]
   )
