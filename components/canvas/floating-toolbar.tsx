@@ -388,6 +388,8 @@ function GeneratedImageToolbar({
   const { processingShapes, addProcessingShape, removeProcessingShape, setMockupDepth, addGeneratedImage } = useAppStore()
   const [showPromptInput, setShowPromptInput] = useState(false)
   const [editPrompt, setEditPrompt] = useState("")
+  const [showVariationsPrompt, setShowVariationsPrompt] = useState(false)
+  const [variationsPrompt, setVariationsPrompt] = useState("")
   const [activeSubMenu, setActiveSubMenu] = useState<string | null>(null)
   const [showExportPicker, setShowExportPicker] = useState(false)
   const isProcessing = processingShapes.has(shapeId)
@@ -627,7 +629,9 @@ function GeneratedImageToolbar({
   }, [shape])
 
   const handleVariations = useCallback(async () => {
+    if (!variationsPrompt.trim()) return
     addProcessingShape(shapeId)
+    setShowVariationsPrompt(false)
     const w = shape.props.w
     const h = shape.props.h
     const bounds = engine.getShapePageBounds(shapeId)
@@ -635,9 +639,10 @@ function GeneratedImageToolbar({
 
     await mockDelay()
 
+    const newShapes = []
     for (let i = 0; i < 3; i++) {
       const seed = getNextSeed()
-      engine.createShape({
+      const newShape = engine.createShape({
         type: GENERATED_IMAGE_TYPE,
         x: bounds.x + (i + 1) * (w + 20),
         y: bounds.y,
@@ -645,7 +650,7 @@ function GeneratedImageToolbar({
           w,
           h,
           imageUrl: getPicsumUrl(Math.round(w), Math.round(h), seed),
-          prompt: shape.props.prompt,
+          prompt: variationsPrompt,
           style: shape.props.style,
           model: shape.props.model,
           aspectRatio: shape.props.aspectRatio,
@@ -653,9 +658,22 @@ function GeneratedImageToolbar({
           isLoading: false,
         },
       })
+      newShapes.push(newShape)
+    }
+    for (const ns of newShapes) {
+      addGeneratedImage({
+        id: ns.id,
+        prompt: variationsPrompt,
+        model: shape.props.model,
+        style: shape.props.style,
+        aspectRatio: shape.props.aspectRatio,
+        imageUrl: (ns.props as any).imageUrl,
+        seed: (ns.props as any).seed,
+      })
     }
     removeProcessingShape(shapeId)
-  }, [shapeId, shape, engine, addProcessingShape, removeProcessingShape])
+    setVariationsPrompt("")
+  }, [variationsPrompt, shapeId, shape, engine, addProcessingShape, removeProcessingShape, addGeneratedImage])
 
   const handleDelete = useCallback(() => {
     engine.deleteShape(shapeId)
@@ -790,6 +808,72 @@ function GeneratedImageToolbar({
         </div>
       )}
 
+      {showVariationsPrompt && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 8px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#1a1a2e",
+            borderRadius: 10,
+            padding: 8,
+            border: "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            gap: 6,
+            width: 280,
+          }}
+        >
+          <input
+            type="text"
+            value={variationsPrompt}
+            onChange={(e) => setVariationsPrompt(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleVariations()}
+            placeholder="Describe variations..."
+            autoFocus
+            style={{
+              flex: 1,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 6,
+              padding: "6px 10px",
+              color: "#e0e0f0",
+              fontSize: 12,
+              outline: "none",
+              fontFamily: "system-ui, sans-serif",
+            }}
+          />
+          <button
+            onClick={handleVariations}
+            style={{
+              background: "rgba(120,130,255,0.2)",
+              border: "none",
+              borderRadius: 6,
+              padding: "6px 8px",
+              color: "#a0a8ff",
+              cursor: "pointer",
+              display: "flex",
+            }}
+          >
+            <Send size={14} />
+          </button>
+          <button
+            onClick={() => setShowVariationsPrompt(false)}
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              border: "none",
+              borderRadius: 6,
+              padding: "6px 8px",
+              color: "#666680",
+              cursor: "pointer",
+              display: "flex",
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {showExportPicker && (
         <div
           style={{
@@ -885,30 +969,35 @@ function GeneratedImageToolbar({
         <FloatBtn
           icon={<Send size={14} />}
           label="Edit Prompt"
-          onClick={() => { setShowPromptInput(!showPromptInput); setActiveSubMenu(null) }}
+          onClick={() => { setShowPromptInput(!showPromptInput); setShowVariationsPrompt(false); setActiveSubMenu(null); setShowExportPicker(false) }}
           active={showPromptInput}
         />
         <FloatBtn
           icon={<Blend size={14} />}
           label="AI Tools"
-          onClick={() => setActiveSubMenu(activeSubMenu === "tools" ? null : "tools")}
+          onClick={() => { setActiveSubMenu(activeSubMenu === "tools" ? null : "tools"); setShowPromptInput(false); setShowVariationsPrompt(false); setShowExportPicker(false) }}
           active={activeSubMenu === "tools"}
         />
         <FloatBtn
           icon={<CopyPlus size={14} />}
           label="Add Elements"
-          onClick={() => setActiveSubMenu(activeSubMenu === "add" ? null : "add")}
+          onClick={() => { setActiveSubMenu(activeSubMenu === "add" ? null : "add"); setShowPromptInput(false); setShowVariationsPrompt(false); setShowExportPicker(false) }}
           active={activeSubMenu === "add"}
         />
         <FloatDivider />
         <FloatBtn
           icon={<Download size={14} />}
           label="Export"
-          onClick={() => { setShowExportPicker(!showExportPicker); setShowPromptInput(false); setActiveSubMenu(null) }}
+          onClick={() => { setShowExportPicker(!showExportPicker); setShowPromptInput(false); setShowVariationsPrompt(false); setActiveSubMenu(null) }}
           active={showExportPicker}
         />
         <FloatBtn icon={<Copy size={14} />} label="Copy Prompt" onClick={handleCopyPrompt} />
-        <FloatBtn icon={<Shuffle size={14} />} label="Variations" onClick={handleVariations} />
+        <FloatBtn
+          icon={<Shuffle size={14} />}
+          label="Variations"
+          onClick={() => { setShowVariationsPrompt(!showVariationsPrompt); setShowPromptInput(false); setShowExportPicker(false); setActiveSubMenu(null) }}
+          active={showVariationsPrompt}
+        />
         <FloatDivider />
         <FloatBtn icon={<Trash2 size={14} />} label="Delete" onClick={handleDelete} danger />
         {shape.props.sourceShapeIds && shape.props.sourceShapeIds.length > 0 && (
