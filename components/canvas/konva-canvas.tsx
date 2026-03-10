@@ -584,9 +584,20 @@ export function KonvaCanvas() {
           ))}
         </Layer>
 
-        {/* Shapes layer */}
+        {/* Shapes layer — render frames first (behind), then other shapes on top */}
         <Layer>
-          {shapes.map((shape) => (
+          {shapes.filter((s) => s.type === CANVAS_FRAME_TYPE).map((shape) => (
+            <ShapeRenderer
+              key={shape.id}
+              shape={shape}
+              isSelected={selectedIds.includes(shape.id)}
+              onSelect={handleShapeSelect}
+              onDragEnd={handleShapeDragEnd}
+              onTextChange={handleTextChange}
+              isDraggable={isDraggable}
+            />
+          ))}
+          {shapes.filter((s) => s.type !== CANVAS_FRAME_TYPE).map((shape) => (
             <ShapeRenderer
               key={shape.id}
               shape={shape}
