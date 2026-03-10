@@ -37,6 +37,7 @@ export function KonvaCanvas() {
   // Marquee selection state
   const marqueeRef = useRef<{ startX: number; startY: number; active: boolean }>({ startX: 0, startY: 0, active: false })
   const [marqueeRect, setMarqueeRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  const marqueeRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
 
   // Window resize
   useEffect(() => {
@@ -305,7 +306,9 @@ export function KonvaCanvas() {
           if (pointer) {
             const pagePoint = engine.screenToPage(pointer)
             marqueeRef.current = { startX: pagePoint.x, startY: pagePoint.y, active: true }
-            setMarqueeRect({ x: pagePoint.x, y: pagePoint.y, w: 0, h: 0 })
+            const rect = { x: pagePoint.x, y: pagePoint.y, w: 0, h: 0 }
+            marqueeRectRef.current = rect
+            setMarqueeRect(rect)
           }
         }
         return
@@ -370,12 +373,14 @@ export function KonvaCanvas() {
         const pagePoint = engine.screenToPage(pointer)
         const sx = marqueeRef.current.startX
         const sy = marqueeRef.current.startY
-        setMarqueeRect({
+        const rect = {
           x: Math.min(sx, pagePoint.x),
           y: Math.min(sy, pagePoint.y),
           w: Math.abs(pagePoint.x - sx),
           h: Math.abs(pagePoint.y - sy),
-        })
+        }
+        marqueeRectRef.current = rect
+        setMarqueeRect(rect)
         return
       }
 
@@ -405,7 +410,8 @@ export function KonvaCanvas() {
     // Finish marquee selection
     if (marqueeRef.current.active) {
       marqueeRef.current.active = false
-      if (marqueeRect && (marqueeRect.w > 5 || marqueeRect.h > 5)) {
+      const rect = marqueeRectRef.current
+      if (rect && (rect.w > 5 || rect.h > 5)) {
         // Find all shapes that intersect the marquee rectangle
         const allShapes = engine.getAllShapes()
         const hits: string[] = []
@@ -413,8 +419,8 @@ export function KonvaCanvas() {
           const bounds = engine.getShapePageBounds(shape.id)
           if (!bounds) continue
           // Check overlap
-          const overlapX = marqueeRect.x < bounds.x + bounds.w && marqueeRect.x + marqueeRect.w > bounds.x
-          const overlapY = marqueeRect.y < bounds.y + bounds.h && marqueeRect.y + marqueeRect.h > bounds.y
+          const overlapX = rect.x < bounds.x + bounds.w && rect.x + rect.w > bounds.x
+          const overlapY = rect.y < bounds.y + bounds.h && rect.y + rect.h > bounds.y
           if (overlapX && overlapY) {
             hits.push(shape.id)
           }
@@ -423,6 +429,7 @@ export function KonvaCanvas() {
           engine.selectShapes(hits)
         }
       }
+      marqueeRectRef.current = null
       setMarqueeRect(null)
       return
     }
