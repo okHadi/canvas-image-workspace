@@ -403,9 +403,9 @@ export function KonvaCanvas() {
 
   const handleMouseUp = useCallback(() => {
     // Finish marquee selection
-    if (marqueeRef.current.active && marqueeRect) {
+    if (marqueeRef.current.active) {
       marqueeRef.current.active = false
-      if (marqueeRect.w > 5 || marqueeRect.h > 5) {
+      if (marqueeRect && (marqueeRect.w > 5 || marqueeRect.h > 5)) {
         // Find all shapes that intersect the marquee rectangle
         const allShapes = engine.getAllShapes()
         const hits: string[] = []
