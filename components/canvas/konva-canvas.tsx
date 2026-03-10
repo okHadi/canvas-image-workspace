@@ -38,6 +38,7 @@ export function KonvaCanvas() {
   const marqueeRef = useRef<{ startX: number; startY: number; active: boolean }>({ startX: 0, startY: 0, active: false })
   const [marqueeRect, setMarqueeRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const marqueeRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
+  const skipClickDeselectRef = useRef(false)
 
   // Window resize
   useEffect(() => {
@@ -171,6 +172,10 @@ export function KonvaCanvas() {
   // Click on empty area to deselect
   const handleStageClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+      if (skipClickDeselectRef.current) {
+        skipClickDeselectRef.current = false
+        return
+      }
       if (e.target === stageRef.current || e.target.getClassName() === "Rect" && e.target.id() === "background") {
         engine.deselectAll()
       }
@@ -427,6 +432,7 @@ export function KonvaCanvas() {
         }
         if (hits.length > 0) {
           engine.selectShapes(hits)
+          skipClickDeselectRef.current = true
         }
       }
       marqueeRectRef.current = null
