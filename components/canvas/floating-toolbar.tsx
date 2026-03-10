@@ -37,7 +37,7 @@ export function FloatingToolbar() {
   const engine = useCanvasEngine()
 
   const selectedShapeIds = useCanvasValue("selected ids", (e) => e.getSelectedShapeIds(), [])
-  const cameraZ = useCanvasValue("camera z", (e) => e.getCamera().z, [])
+  const camera = useCanvasValue("camera", (e) => e.getCamera(), [])
 
   if (selectedShapeIds.length === 0) return null
 
