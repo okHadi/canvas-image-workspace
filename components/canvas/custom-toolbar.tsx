@@ -12,6 +12,7 @@ import {
   ZoomOut,
   Frame,
   Type,
+  Maximize,
   PanelRightOpen,
   PanelRightClose,
   ImagePlus,
@@ -165,6 +166,12 @@ export function CustomToolbar() {
         icon={<ZoomOut size={18} />}
         label="Zoom out"
         onClick={() => engine.zoomOut(engine.getViewportScreenCenter())}
+      />
+      <ToolbarButton
+        icon={<Maximize size={18} />}
+        label="Fit to Screen"
+        onClick={() => engine.zoomToFit()}
+        shortcut="⇧1"
       />
       <ToolbarDivider />
       <ToolbarButton
